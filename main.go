@@ -100,7 +100,7 @@ func SetupGraceFullShutdown(handler *http.ServeMux) {
 
 	if sig, ok := <-stop; ok {
 		log.Printf("Signal received: %v \n", sig)
-		log.Println("Waiting to server shutdown...")
+		log.Println("Waiting to HTTP server shutdown...")
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second)*5)
 		defer cancel()
