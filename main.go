@@ -32,7 +32,7 @@ func main() {
 
 	router.HandleFunc("/", routes.NewRouter(db).TodosRouter)
 
-	SetupGraceFullShutdown(router)
+	SetupGraceFullShutdown(router, viper.GetString("PORT"))
 }
 
 func SetupEnv() error {
@@ -78,40 +78,51 @@ func SetupDatabase() *sqlx.DB {
 	return sqlx.NewDb(db, driver_name)
 }
 
-func SetupGraceFullShutdown(handler *http.ServeMux) {
+func SetupGraceFullShutdown(handler *http.ServeMux, port string) {
+var wg sync.WaitGroup
 	httpServer := http.Server{
-		Addr:           fmt.Sprintf(":%s", viper.GetString("PORT")),
+		Addr:           fmt.Sprintf(":%s", port),
 		ReadTimeout:    time.Duration(time.Second) * 60,
 		WriteTimeout:   time.Duration(time.Second) * 30,
-		IdleTimeout:    time.Duration(time.Second) * 120,
-		MaxHeaderBytes: 3145728,
+		IdleTimeout:    time.Duration(time.Second) * 15,
+		MaxHeaderBytes: http.DefaultMaxHeaderBytes,
 		Handler:        handler,
 	}
 
+	runtime.GOMAXPROCS(runtime.NumCPU())
+	wg.Add(1)
 	go func() {
 		if err := httpServer.ListenAndServe(); errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("Server not runnings: %s", err.Error())
+			log.Printf("Server not runnings: %s", err.Error())
 		}
-	}()
-	log.Printf("Server running on port: %s", viper.GetString("PORT"))
+		log.Printf("Server running on port: %s", port)
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+		stop := make(chan os.Signal, 1)
+		signal.Notify(stop, os.Interrupt, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 
-	if sig, ok := <-stop; ok {
-		log.Printf("Signal received: %v \n", sig)
-		log.Println("Waiting to HTTP server shutdown...")
+		if sig, ok := <-stop; ok {
+			log.Printf("Signal received: %v \n", sig)
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second)*5)
-		defer cancel()
+			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second*10))
+			defer cancel()
 
-		if _, ok := <-ctx.Done(); ok {
-			if err := httpServer.Shutdown(ctx); err != nil {
-				log.Fatalf("HTTP server shutdown error: %s", err.Error())
+			if _, ok := <-ctx.Done(); !ok {
+				log.Println("Waiting to HTTP server shutdown...")
+
+				if err := db.Close(); err != nil {
+					log.Printf("Database shutdown error: %s", err.Error())
+				}
+
+				if err := httpServer.Shutdown(ctx); err != nil {
+					log.Printf("HTTP server shutdown error: %s", err.Error())
+				}
+
+				defer close(stop)
+				log.Println("HTTP server shutdown success")
 			}
 		}
 
-		defer close(stop)
-		log.Println("HTTP server shutdown success")
-	}
+		wg.Done()
+	}()
+	wg.Wait()
 }
