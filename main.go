@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -50,7 +51,14 @@ func SetupDatabase() *sqlx.DB {
 	db, _ := sql.Open(driver_name, dsn_url)
 
 	if err := db.Ping(); err != nil {
-		log.Fatalf("Database connection error: %s", err.Error())
+		defer log.Fatalf("Database connection error: %s", err.Error())
+		db.Close()
+	} else {
+		ctx, close := context.WithTimeout(context.TODO(), time.Duration(time.Second*30))
+		defer close()
+
+		log.Println("Database connection success")
+		db.Conn(ctx)
 	}
 
 	if viper.GetString("GO_ENV") == "development" {
@@ -67,7 +75,6 @@ func SetupDatabase() *sqlx.DB {
 		}
 	}
 
-	defer log.Println("Database connection success")
 	return sqlx.NewDb(db, driver_name)
 }
 
@@ -81,25 +88,30 @@ func SetupGraceFullShutdown(handler *http.ServeMux) {
 		Handler:        handler,
 	}
 
-	if err := httpServer.ListenAndServe(); err != nil {
-		log.Fatalf("Server is not running: %s", err.Error())
-		os.Exit(0)
-	}
+	go func() {
+		if err := httpServer.ListenAndServe(); errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("Server is not runnings: %s", err.Error())
+		}
+	}()
+	log.Printf("Server running on port: %s", viper.GetString("PORT"))
 
-	osSignal := make(chan os.Signal, 1)
-	signal.Notify(osSignal, os.Interrupt, syscall.SIGTERM)
-	log.Printf("Signal received: %v\n", <-osSignal)
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 
-	if sig := <-osSignal; sig == os.Interrupt || sig == syscall.SIGTERM {
-		log.Println("Waiting to server shutdown")
+	if sig, ok := <-stop; ok {
+		log.Printf("Signal received: %v \n", sig)
+		log.Println("Waiting to server shutdown...")
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second)*10)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second)*5)
 		defer cancel()
 
-		if err := httpServer.Shutdown(ctx); err != nil {
-			log.Fatalf("HTTP server shutdown error: %s", err.Error())
+		if _, ok := <-ctx.Done(); ok {
+			if err := httpServer.Shutdown(ctx); err != nil {
+				log.Fatalf("HTTP server shutdown error: %s", err.Error())
+			}
 		}
 
+		defer close(stop)
 		log.Println("HTTP server shutdown")
 	}
 }
