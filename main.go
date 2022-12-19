@@ -90,7 +90,7 @@ func SetupGraceFullShutdown(handler *http.ServeMux) {
 
 	go func() {
 		if err := httpServer.ListenAndServe(); errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("Server is not runnings: %s", err.Error())
+			log.Fatalf("Server not runnings: %s", err.Error())
 		}
 	}()
 	log.Printf("Server running on port: %s", viper.GetString("PORT"))
@@ -112,6 +112,6 @@ func SetupGraceFullShutdown(handler *http.ServeMux) {
 		}
 
 		defer close(stop)
-		log.Println("HTTP server shutdown")
+		log.Println("HTTP server shutdown success")
 	}
 }
