@@ -1,0 +1,5 @@
+development:
+    dialect: postgres
+    datasource: postgres://restuwahyu13:restuwahyu13@localhost:5432/postgres?sslmode=disable
+    dir: database/migrations
+    table: migrations
