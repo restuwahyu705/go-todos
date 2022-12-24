@@ -101,9 +101,9 @@ func SetupGraceFullShutdown(handler *httprouter.Router, db *sqlx.DB, port string
 	wg.Add(1)
 	go func() {
 		if err := httpServer.ListenAndServe(); errors.Is(err, http.ErrServerClosed) {
-			log.Printf("Server not runnings: %s", err.Error())
+			log.Printf("HTTP server not running: %s", err.Error())
 		}
-		log.Printf("Server running on port: %s", port)
+		log.Printf("HTTP server running on port: %s", port)
 		wg.Done()
 	}()
 	wg.Wait()
