@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
+	"sync"
 	"syscall"
 	"time"
 
@@ -32,7 +34,7 @@ func main() {
 
 	router.HandleFunc("/", routes.NewRouter(db).TodosRouter)
 
-	SetupGraceFullShutdown(router, viper.GetString("PORT"))
+	SetupGraceFullShutdown(router, db, viper.GetString("PORT"))
 }
 
 func SetupEnv() error {
@@ -78,8 +80,10 @@ func SetupDatabase() *sqlx.DB {
 	return sqlx.NewDb(db, driver_name)
 }
 
-func SetupGraceFullShutdown(handler *http.ServeMux, port string) {
-var wg sync.WaitGroup
+func SetupGraceFullShutdown(handler *http.ServeMux, db *sqlx.DB, port string) {
+	runtime.GOMAXPROCS(runtime.NumCPU())
+
+	var wg sync.WaitGroup
 	httpServer := http.Server{
 		Addr:           fmt.Sprintf(":%s", port),
 		ReadTimeout:    time.Duration(time.Second) * 60,
@@ -89,40 +93,38 @@ var wg sync.WaitGroup
 		Handler:        handler,
 	}
 
-	runtime.GOMAXPROCS(runtime.NumCPU())
 	wg.Add(1)
 	go func() {
 		if err := httpServer.ListenAndServe(); errors.Is(err, http.ErrServerClosed) {
 			log.Printf("Server not runnings: %s", err.Error())
 		}
 		log.Printf("Server running on port: %s", port)
-
-		stop := make(chan os.Signal, 1)
-		signal.Notify(stop, os.Interrupt, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
-
-		if sig, ok := <-stop; ok {
-			log.Printf("Signal received: %v \n", sig)
-
-			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second*10))
-			defer cancel()
-
-			if _, ok := <-ctx.Done(); !ok {
-				log.Println("Waiting to HTTP server shutdown...")
-
-				if err := db.Close(); err != nil {
-					log.Printf("Database shutdown error: %s", err.Error())
-				}
-
-				if err := httpServer.Shutdown(ctx); err != nil {
-					log.Printf("HTTP server shutdown error: %s", err.Error())
-				}
-
-				defer close(stop)
-				log.Println("HTTP server shutdown success")
-			}
-		}
-
 		wg.Done()
 	}()
 	wg.Wait()
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+
+	if sig, ok := <-stop; ok {
+		log.Printf("Signal received: %v \n", sig)
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second*10))
+		defer cancel()
+
+		// if _, ok := <-ctx.Done(); !ok {
+		log.Println("Waiting to HTTP server shutdown...")
+
+		if err := db.Close(); err != nil {
+			log.Printf("Database shutdown error: %s", err.Error())
+		}
+
+		if err := httpServer.Shutdown(ctx); err != nil {
+			log.Printf("HTTP server shutdown error: %s", err.Error())
+		}
+
+		defer close(stop)
+		log.Println("HTTP server shutdown success")
+		os.Exit(0)
+	}
 }

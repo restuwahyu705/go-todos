@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	sqlb "github.com/Masterminds/squirrel"
+	sqlb "github.com/huandu/go-sqlbuilder"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -43,20 +43,10 @@ func (h *routesStruct) TodosRouter(w http.ResponseWriter, r *http.Request) {
 
 	todos := []Todos{}
 	todo := Todos{}
-	psql := sqlb.StatementBuilder.PlaceholderFormat(sqlb.Dollar)
+	psql := sqlb.PostgreSQL
 
 	if r.Method == http.MethodGet {
-		query, _, err := psql.Select("*").From("todos").ToSql()
-
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(&APIResponse{
-				StatCode:    http.StatusInternalServerError,
-				StatMessage: fmt.Sprintf("Query builder error: %s", err.Error()),
-				Data:        todos,
-			})
-			return
-		}
+		query := psql.NewSelectBuilder().Select("*").From("todos").String()
 
 		ctx, close := context.WithTimeout(r.Context(), time.Duration(time.Second*5))
 		defer close()
@@ -87,16 +77,7 @@ func (h *routesStruct) TodosRouter(w http.ResponseWriter, r *http.Request) {
 			Data:        todos,
 		})
 	} else if r.Method == http.MethodPost {
-		query, _, err := psql.Insert("todos").Columns("name", "category", "description").Values("?", "?", "?").ToSql()
-
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(&APIResponse{
-				StatCode:    http.StatusInternalServerError,
-				StatMessage: fmt.Sprintf("Query builder error: %s", err.Error()),
-			})
-			return
-		}
+		query := psql.NewInsertBuilder().InsertInto("todos").Cols("name", "category", "description").Values("?", "?", "?").String()
 
 		if err := json.NewDecoder(r.Body).Decode(&todo); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
