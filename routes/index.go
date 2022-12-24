@@ -31,8 +31,8 @@ type APIResponse struct {
 }
 
 type routesInterface interface {
-	GetlAllTodos(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	CreateTodos(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
+	GetlAllTodos(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	GetTodosById(w http.ResponseWriter, r *http.Request, params httprouter.Params)
 	DeleteTodosById(w http.ResponseWriter, r *http.Request, params httprouter.Params)
 	UpdateTodosById(w http.ResponseWriter, r *http.Request, params httprouter.Params)
@@ -44,6 +44,41 @@ type routesStruct struct {
 
 func NewRouter(db *sqlx.DB) routesInterface {
 	return &routesStruct{db: db}
+}
+
+func (h *routesStruct) CreateTodos(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	todo := Todos{}
+	psql := sqlb.PostgreSQL
+
+	w.Header().Set("content-type", "application/json")
+
+	query := psql.NewInsertBuilder().InsertInto("todos").Cols("name", "category", "description").Values("?", "?", "?").String()
+
+	if err := json.NewDecoder(r.Body).Decode(&todo); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(&APIResponse{
+			StatCode:    http.StatusBadRequest,
+			StatMessage: fmt.Sprintf("Request body not valid: %s", err.Error()),
+		})
+		return
+	}
+
+	ctx, close := context.WithTimeout(r.Context(), time.Duration(time.Second*3))
+	defer close()
+
+	if _, err := h.db.ExecContext(ctx, query, helpers.BodyParser(todo, "insert")...); err != nil {
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(&APIResponse{
+			StatCode:    http.StatusForbidden,
+			StatMessage: fmt.Sprintf("Insert new todos failed: %s", err.Error()),
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(&APIResponse{
+		StatCode:    http.StatusOK,
+		StatMessage: "Insert new todos success",
+	})
 }
 
 func (h *routesStruct) GetlAllTodos(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
@@ -81,41 +116,6 @@ func (h *routesStruct) GetlAllTodos(w http.ResponseWriter, r *http.Request, _ ht
 		StatCode:    http.StatusOK,
 		StatMessage: "Todos data already to use",
 		Data:        todos,
-	})
-}
-
-func (h *routesStruct) CreateTodos(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	todo := Todos{}
-	psql := sqlb.PostgreSQL
-
-	w.Header().Set("content-type", "application/json")
-
-	query := psql.NewInsertBuilder().InsertInto("todos").Cols("name", "category", "description").Values("?", "?", "?").String()
-
-	if err := json.NewDecoder(r.Body).Decode(&todo); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(&APIResponse{
-			StatCode:    http.StatusBadRequest,
-			StatMessage: fmt.Sprintf("Request body not valid: %s", err.Error()),
-		})
-		return
-	}
-
-	ctx, close := context.WithTimeout(r.Context(), time.Duration(time.Second*3))
-	defer close()
-
-	if _, err := h.db.ExecContext(ctx, query, helpers.BodyParser(todo, "insert")...); err != nil {
-		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(&APIResponse{
-			StatCode:    http.StatusForbidden,
-			StatMessage: fmt.Sprintf("Insert new todos failed: %s", err.Error()),
-		})
-		return
-	}
-
-	json.NewEncoder(w).Encode(&APIResponse{
-		StatCode:    http.StatusOK,
-		StatMessage: "Insert new todos success",
 	})
 }
 
