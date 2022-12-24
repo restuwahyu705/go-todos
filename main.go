@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/julienschmidt/httprouter"
 	_ "github.com/lib/pq"
 	migrate "github.com/rubenv/sql-migrate"
 	"github.com/spf13/viper"
@@ -30,9 +31,13 @@ func main() {
 	}
 
 	db := SetupDatabase()
-	router := http.NewServeMux()
+	router := httprouter.New()
 
-	router.HandleFunc("/", routes.NewRouter(db).TodosRouter)
+	router.POST("/", routes.NewRouter(db).CreateTodos)
+	router.GET("/", routes.NewRouter(db).GetlAllTodos)
+	router.GET("/:id", routes.NewRouter(db).GetTodosById)
+	router.DELETE("/:id", routes.NewRouter(db).DeleteTodosById)
+	router.POST("/:id", routes.NewRouter(db).UpdateTodosById)
 
 	SetupGraceFullShutdown(router, db, viper.GetString("PORT"))
 }
@@ -80,7 +85,7 @@ func SetupDatabase() *sqlx.DB {
 	return sqlx.NewDb(db, driver_name)
 }
 
-func SetupGraceFullShutdown(handler *http.ServeMux, db *sqlx.DB, port string) {
+func SetupGraceFullShutdown(handler *httprouter.Router, db *sqlx.DB, port string) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	var wg sync.WaitGroup
