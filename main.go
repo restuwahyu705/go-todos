@@ -117,7 +117,6 @@ func SetupGraceFullShutdown(handler *httprouter.Router, db *sqlx.DB, port string
 		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Second*10))
 		defer cancel()
 
-		// if _, ok := <-ctx.Done(); !ok {
 		log.Println("Waiting to HTTP server shutdown...")
 
 		if err := db.Close(); err != nil {
@@ -130,6 +129,7 @@ func SetupGraceFullShutdown(handler *httprouter.Router, db *sqlx.DB, port string
 
 		defer close(stop)
 		log.Println("HTTP server shutdown success")
+
 		os.Exit(0)
 	}
 }
