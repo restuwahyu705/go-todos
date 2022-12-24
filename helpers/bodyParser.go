@@ -6,14 +6,14 @@ import (
 	"sync"
 )
 
-func BodyParser(body any, queryType string) []any {
-	var mutex sync.Mutex
-	convertToMapping := make(map[string]any)
+func BodyParser(body interface{}, queryType string) []interface{} {
+	var mutex sync.RWMutex
+	convertToMapping := make(map[string]interface{})
 
 	convertToJson, _ := json.Marshal(body)
 	json.Unmarshal(convertToJson, &convertToMapping)
 
-	storeRequest := []any{}
+	storeRequest := []interface{}{}
 
 	if queryType == "insert" {
 		for _, v := range convertToMapping {

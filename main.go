@@ -20,7 +20,7 @@ import (
 	migrate "github.com/rubenv/sql-migrate"
 	"github.com/spf13/viper"
 
-	"github.com/restuwahyu13/todos/routes"
+	"github.com/restuwahyu705/go-todos/routes"
 )
 
 func main() {
@@ -37,7 +37,7 @@ func main() {
 	router.GET("/", routes.NewRouter(db).GetlAllTodos)
 	router.GET("/:id", routes.NewRouter(db).GetTodosById)
 	router.DELETE("/:id", routes.NewRouter(db).DeleteTodosById)
-	router.POST("/:id", routes.NewRouter(db).UpdateTodosById)
+	router.PUT("/:id", routes.NewRouter(db).UpdateTodosById)
 
 	SetupGraceFullShutdown(router, db, viper.GetString("PORT"))
 }

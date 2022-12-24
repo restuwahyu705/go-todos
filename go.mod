@@ -1,4 +1,4 @@
-module github.com/restuwahyu13/todos
+module github.com/restuwahyu705/go-todos
 
 go 1.19
 
