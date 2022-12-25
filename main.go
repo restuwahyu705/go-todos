@@ -56,8 +56,8 @@ func SetupDatabase() *sqlx.DB {
 	migration_dir := viper.GetString("DB_DIR_MIGRATION")
 
 	db, _ := sql.Open(driver_name, dsn_url)
-	db.SetConnMaxIdleTime(time.Duration(time.Second * 60))
-	db.SetConnMaxLifetime(time.Duration(time.Second * 30))
+	db.SetConnMaxIdleTime(time.Duration(time.Second * 120))
+	db.SetConnMaxLifetime(time.Duration(time.Second * 60))
 
 	if err := db.Ping(); err != nil {
 		defer log.Fatalf("Database connection error: %s", err.Error())

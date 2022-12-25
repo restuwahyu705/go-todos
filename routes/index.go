@@ -52,21 +52,22 @@ func (h *routesStruct) CreateTodos(w http.ResponseWriter, r *http.Request, _ htt
 
 	w.Header().Set("content-type", "application/json")
 
-	query := psql.NewInsertBuilder().InsertInto("todos").Cols("name", "category", "description").Values("?", "?", "?").String()
-
-	if err := json.NewDecoder(r.Body).Decode(&todo); err != nil {
+	cols, args, err := helpers.ScanStructMutation(r, todo)
+	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(&APIResponse{
 			StatCode:    http.StatusBadRequest,
-			StatMessage: fmt.Sprintf("Request body not valid: %s", err.Error()),
+			StatMessage: err.Error(),
 		})
 		return
 	}
 
+	query := psql.NewInsertBuilder().InsertInto("todos").Cols(cols...).Values("?", "?", "?").String()
+
 	ctx, close := context.WithTimeout(r.Context(), time.Duration(time.Second*3))
 	defer close()
 
-	if _, err := h.db.ExecContext(ctx, query, helpers.BodyParser(todo, "insert")...); err != nil {
+	if _, err := h.db.ExecContext(ctx, query, args...); err != nil {
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(&APIResponse{
 			StatCode:    http.StatusForbidden,
